@@ -430,6 +430,7 @@ export const newTestService = <T extends BaseService>(
     overrides.partner || (mocks.partner as As<PartnerRepository>),
     overrides.person || (mocks.person as As<PersonRepository>),
     overrides.plugin || (mocks.plugin as As<PluginRepository>),
+    overrides.post || (mocks.post as As<PostRepository>),
     overrides.process || (mocks.process as As<ProcessRepository>),
     overrides.search || (mocks.search as As<SearchRepository>),
     overrides.serverInfo || (mocks.serverInfo as As<ServerInfoRepository>),

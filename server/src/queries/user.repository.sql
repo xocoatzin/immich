@@ -314,6 +314,15 @@ where
 order by
   "createdAt" desc
 
+-- UserRepository.getExistingIds
+select
+  "user"."id"
+from
+  "user"
+where
+  "user"."id" in ($1)
+  and "user"."deletedAt" is null
+
 -- UserRepository.getUserStats
 select
   "user"."id" as "userId",

@@ -5,7 +5,7 @@ import { DateTime } from 'luxon';
 import { InjectKysely } from 'nestjs-kysely';
 import type { UserMetadata, UserMetadataItem } from 'src/types.js';
 import { columns } from 'src/database.js';
-import { DummyValue, GenerateSql } from 'src/decorators.js';
+import { ChunkedSet, DummyValue, GenerateSql } from 'src/decorators.js';
 import { AssetType, AssetVisibility, UserStatus } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import { UserTable } from 'src/schema/tables/user.table.js';
@@ -169,6 +169,22 @@ export class UserRepository {
       .$if(!!id, (eb) => eb.where('user.id', '=', id!))
       .orderBy('createdAt', 'desc')
       .execute();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 0 })
+  async getExistingIds(ids: Set<string>): Promise<Set<string>> {
+    if (ids.size === 0) {
+      return new Set();
+    }
+
+    const rows = await this.db
+      .selectFrom('user')
+      .select('user.id')
+      .where('user.id', 'in', [...ids])
+      .where('user.deletedAt', 'is', null)
+      .execute();
+    return new Set(rows.map((row) => row.id));
   }
 
   async create(dto: Insertable<UserTable>) {

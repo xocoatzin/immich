@@ -41,6 +41,7 @@ import { OcrRepository } from 'src/repositories/ocr.repository.js';
 import { PartnerRepository } from 'src/repositories/partner.repository.js';
 import { PersonRepository } from 'src/repositories/person.repository.js';
 import { PluginRepository } from 'src/repositories/plugin.repository.js';
+import { PostRepository } from 'src/repositories/post.repository.js';
 import { ProcessRepository } from 'src/repositories/process.repository.js';
 import { SearchRepository } from 'src/repositories/search.repository.js';
 import { ServerInfoRepository } from 'src/repositories/server-info.repository.js';
@@ -101,6 +102,7 @@ export const BASE_SERVICE_DEPENDENCIES = [
   PartnerRepository,
   PersonRepository,
   PluginRepository,
+  PostRepository,
   ProcessRepository,
   SearchRepository,
   ServerInfoRepository,
@@ -163,6 +165,7 @@ export class BaseService {
     protected partnerRepository: PartnerRepository,
     protected personRepository: PersonRepository,
     protected pluginRepository: PluginRepository,
+    protected postRepository: PostRepository,
     protected processRepository: ProcessRepository,
     protected searchRepository: SearchRepository,
     protected serverInfoRepository: ServerInfoRepository,
@@ -234,6 +237,7 @@ export class BaseService {
       ctx.partnerRepository,
       ctx.personRepository,
       ctx.pluginRepository,
+      ctx.postRepository,
       ctx.processRepository,
       ctx.searchRepository,
       ctx.serverInfoRepository,
