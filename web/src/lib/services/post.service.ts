@@ -8,8 +8,13 @@ import {
   type PostResponseDto,
 } from '@immich/sdk';
 import { modalManager, toastManager } from '@immich/ui';
+import PostComposerModal from '$lib/components/posts/PostComposerModal.svelte';
 import { handleError } from '$lib/utils/handle-error';
 import { getFormatter } from '$lib/utils/i18n';
+
+/** Open the post composer modal. Resolves with the saved post, or undefined if cancelled. */
+export const openPostComposer = (post?: PostResponseDto): Promise<PostResponseDto | undefined> =>
+  modalManager.show(PostComposerModal, { post });
 
 export type PostAttachmentDetails = {
   attachment: PostAttachmentResponseDto;

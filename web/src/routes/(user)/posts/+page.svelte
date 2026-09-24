@@ -3,9 +3,11 @@
   import UserPageLayout from '$lib/components/layouts/UserPageLayout.svelte';
   import PostCard from '$lib/components/posts/PostCard.svelte';
   import EmptyPlaceholder from '$lib/components/shared-components/EmptyPlaceholder.svelte';
+  import { openPostComposer } from '$lib/services/post.service';
   import { handleError } from '$lib/utils/handle-error';
   import { getPosts, type PostResponseDto } from '@immich/sdk';
-  import { Button } from '@immich/ui';
+  import { Button, type ActionItem } from '@immich/ui';
+  import { mdiPlus } from '@mdi/js';
   import { t } from 'svelte-i18n';
   import type { PageData } from './$types';
 
@@ -43,9 +45,20 @@
   const handleDelete = (deleted: PostResponseDto) => {
     posts = posts.filter((post) => post.id !== deleted.id);
   };
+
+  const newPostAction: ActionItem = {
+    title: $t('new_post'),
+    icon: mdiPlus,
+    onAction: async () => {
+      const saved = await openPostComposer();
+      if (saved) {
+        posts = [saved, ...posts];
+      }
+    },
+  };
 </script>
 
-<UserPageLayout title={data.meta.title}>
+<UserPageLayout title={data.meta.title} actions={[newPostAction]}>
   <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-8">
     {#if posts.length === 0}
       <EmptyPlaceholder src={emptyUrl} text={$t('posts_empty')} />

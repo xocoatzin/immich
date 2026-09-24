@@ -5,7 +5,7 @@
   import UserAvatar from '$lib/components/shared-components/UserAvatar.svelte';
   import { authManager } from '$lib/managers/auth-manager.svelte';
   import { Route } from '$lib/route';
-  import { deletePostAndNotify, getPostAttachmentDetails } from '$lib/services/post.service';
+  import { deletePostAndNotify, getPostAttachmentDetails, openPostComposer } from '$lib/services/post.service';
   import { getAssetMediaUrl } from '$lib/utils';
   import { AssetMediaSize, PostVisibility, type PostResponseDto } from '@immich/sdk';
   import { Icon, IconButton } from '@immich/ui';
@@ -16,6 +16,7 @@
     mdiEarth,
     mdiImageAlbum,
     mdiLockOutline,
+    mdiPencilOutline,
     mdiTrashCanOutline,
   } from '@mdi/js';
   import { DateTime } from 'luxon';
@@ -61,6 +62,14 @@
       onDelete?.(post);
     }
   };
+
+  const handleEdit = async () => {
+    closeMenu();
+    const saved = await openPostComposer(post);
+    if (saved) {
+      onUpdate?.(saved);
+    }
+  };
 </script>
 
 <article
@@ -92,7 +101,15 @@
             role="menu"
             class="absolute right-0 z-10 mt-1 w-44 rounded-xl border border-immich-fg/10 bg-immich-bg py-1 shadow-lg dark:border-immich-dark-fg/10 dark:bg-immich-dark-bg"
           >
-            <!-- Edit returns with the post composer in the next increment -->
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-immich-fg/5 dark:hover:bg-immich-dark-fg/5"
+              onclick={handleEdit}
+            >
+              <Icon icon={mdiPencilOutline} size="16" />
+              {$t('edit')}
+            </button>
             <button
               type="button"
               role="menuitem"
