@@ -102,6 +102,11 @@ export class PostService extends BaseService {
   }
 
   async getFeed(auth: AuthDto, dto: PostFeedDto): Promise<PostResponseDto[]> {
+    if (dto.assetId) {
+      // An asset filter behaves like the album collection filter: it ignores
+      // the other feed parameters.
+      return this.getByAssetId(auth, dto.assetId);
+    }
     const posts = await this.postRepository.getFeed(auth.user.id, { limit: dto.limit, cursor: dto.cursor });
     return this.toResponses(auth, posts);
   }

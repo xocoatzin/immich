@@ -89,6 +89,17 @@ describe('post DTOs', () => {
       expect(PostFeedSchema.safeParse({ limit: 101 }).success).toBe(false);
       expect(PostFeedSchema.safeParse({ limit: 100 }).success).toBe(true);
     });
+
+    it('should accept an asset id filter', () => {
+      const assetId = newUuid();
+      const result = PostFeedSchema.safeParse({ assetId });
+      expect(result.success).toBe(true);
+      expect(result.data?.assetId).toBe(assetId);
+    });
+
+    it('should reject a non-UUID asset id filter', () => {
+      expect(PostFeedSchema.safeParse({ assetId: 'not-a-uuid' }).success).toBe(false);
+    });
   });
 
   describe('PostValidateSchema', () => {

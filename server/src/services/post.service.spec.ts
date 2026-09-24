@@ -823,6 +823,21 @@ describe(PostService.name, () => {
 
       expect(mocks.post.getFeed).toHaveBeenCalledWith(userId, { limit: 20, cursor });
     });
+
+    it('should delegate to getByAssetId when an asset filter is set', async () => {
+      const userId = newUuid();
+      const assetId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      mockAssetAccess(mocks, new Set([assetId]));
+      mocks.post.getByAssetId.mockResolvedValue([]);
+      mockEmptyHydration(mocks);
+
+      await sut.getFeed(auth, { limit: 20, assetId });
+
+      expect(mocks.post.getByAssetId).toHaveBeenCalledWith(userId, assetId);
+      expect(mocks.post.getFeed).not.toHaveBeenCalled();
+    });
   });
 
   describe('getByAssetId', () => {

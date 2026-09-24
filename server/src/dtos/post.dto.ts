@@ -53,8 +53,9 @@ export const PostUpdateSchema = PostSchema.partial()
 
 export const PostFeedSchema = z
   .object({
-    limit: z.int().min(1).max(100).default(20).describe('Maximum number of posts to return'),
+    limit: z.coerce.number().int().min(1).max(100).default(20).describe('Maximum number of posts to return'),
     cursor: z.uuidv4().optional().describe('ID of the last post from the previous page'),
+    assetId: z.uuidv4().optional().describe('Filter posts containing this asset ID (ignores other parameters)'),
   })
   .describe('Post feed')
   .meta({ id: 'PostFeedDto' });

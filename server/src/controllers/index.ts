@@ -27,6 +27,7 @@ import { OAuthController } from 'src/controllers/oauth.controller.js';
 import { PartnerController } from 'src/controllers/partner.controller.js';
 import { PersonController } from 'src/controllers/person.controller.js';
 import { PluginController } from 'src/controllers/plugin.controller.js';
+import { PostController } from 'src/controllers/post.controller.js';
 import { QueueController } from 'src/controllers/queue.controller.js';
 import { SearchController } from 'src/controllers/search.controller.js';
 import { ServerController } from 'src/controllers/server.controller.js';
@@ -75,6 +76,7 @@ export const controllers = [
   PartnerController,
   PersonController,
   PluginController,
+  PostController,
   QueueController,
   SearchController,
   ServerController,
