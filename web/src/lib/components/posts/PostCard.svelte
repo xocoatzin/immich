@@ -1,6 +1,7 @@
 <script lang="ts">
   import { clickOutside } from '$lib/actions/click-outside';
   import Markdown from '$lib/components/posts/Markdown.svelte';
+  import PostComments from '$lib/components/posts/PostComments.svelte';
   import PostLikeButton from '$lib/components/posts/PostLikeButton.svelte';
   import UserAvatar from '$lib/components/shared-components/UserAvatar.svelte';
   import { authManager } from '$lib/managers/auth-manager.svelte';
@@ -32,6 +33,9 @@
 
   let menuOpen = $state(false);
   const closeMenu = () => (menuOpen = false);
+  let commentsOpen = $state(false);
+  let localCommentCount = $state<number | undefined>();
+  const commentCount = $derived(localCommentCount ?? post.commentCount);
 
   const isOwner = $derived(authManager.user?.id === post.owner.id);
   const relativeTime = $derived(DateTime.fromISO(post.createdAt).toRelative() ?? '');
@@ -174,10 +178,19 @@
 
   <footer class="flex items-center gap-4 border-t border-immich-fg/10 pt-2 dark:border-immich-dark-fg/10">
     <PostLikeButton {post} {onUpdate} />
-    <span class="flex items-center gap-1 text-sm text-immich-fg/70 dark:text-immich-dark-fg/70">
+    <button
+      type="button"
+      class="flex items-center gap-1 rounded-full px-2 py-1 text-sm text-immich-fg/70 hover:bg-immich-fg/5 dark:text-immich-dark-fg/70 dark:hover:bg-immich-dark-fg/5"
+      onclick={() => (commentsOpen = !commentsOpen)}
+      aria-expanded={commentsOpen}
+      aria-label={$t('toggle_comments')}
+    >
       <Icon icon={mdiCommentOutline} size="18" />
-      {post.commentCount}
+      {commentCount}
       <span class="sr-only">{$t('comments')}</span>
-    </span>
+    </button>
   </footer>
+  {#if commentsOpen}
+    <PostComments {post} {commentCount} onCountChange={(count) => (localCommentCount = count)} />
+  {/if}
 </article>
