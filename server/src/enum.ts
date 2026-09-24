@@ -244,6 +244,17 @@ export enum Permission {
   PluginUpdate = 'plugin.update',
   PluginDelete = 'plugin.delete',
 
+  PostCreate = 'post.create',
+  PostRead = 'post.read',
+  PostUpdate = 'post.update',
+  PostDelete = 'post.delete',
+
+  PostCommentCreate = 'postComment.create',
+  PostCommentDelete = 'postComment.delete',
+
+  PostLikeCreate = 'postLike.create',
+  PostLikeDelete = 'postLike.delete',
+
   ServerAbout = 'server.about',
   ServerApkLinks = 'server.apkLinks',
   ServerStorage = 'server.storage',
@@ -1194,6 +1205,15 @@ export const AssetVisibilitySchema = z
   .describe('Asset visibility')
   .meta({ id: 'AssetVisibility' });
 
+export enum PostVisibility {
+  Private = 'private',
+  Partners = 'partners',
+  Specific = 'specific',
+  Public = 'public',
+}
+
+export const PostVisibilitySchema = z.enum(PostVisibility).describe('Post visibility').meta({ id: 'PostVisibility' });
+
 export enum ReleaseChannel {
   Stable = 'stable',
   ReleaseCandidate = 'releaseCandidate',
@@ -1241,6 +1261,7 @@ export enum ApiTag {
   Partners = 'Partners',
   People = 'People',
   Plugins = 'Plugins',
+  Posts = 'Posts',
   Queues = 'Queues',
   Search = 'Search',
   Server = 'Server',

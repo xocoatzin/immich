@@ -71,6 +71,11 @@ import { PersonGroupTable } from 'src/schema/tables/person-group.table.js';
 import { PersonTable } from 'src/schema/tables/person.table.js';
 import { PluginMethodTable } from 'src/schema/tables/plugin-method.table.js';
 import { PluginTable } from 'src/schema/tables/plugin.table.js';
+import { PostAttachmentTable } from 'src/schema/tables/post-attachment.table.js';
+import { PostAudienceTable } from 'src/schema/tables/post-audience.table.js';
+import { PostCommentTable } from 'src/schema/tables/post-comment.table.js';
+import { PostLikeTable } from 'src/schema/tables/post-like.table.js';
+import { PostTable } from 'src/schema/tables/post.table.js';
 import { SessionTable } from 'src/schema/tables/session.table.js';
 import { SharedLinkAssetTable } from 'src/schema/tables/shared-link-asset.table.js';
 import { SharedLinkTable } from 'src/schema/tables/shared-link.table.js';
@@ -292,6 +297,12 @@ export interface DB {
 
   plugin: PluginTable;
   plugin_method: PluginMethodTable;
+
+  post: PostTable;
+  post_attachment: PostAttachmentTable;
+  post_audience: PostAudienceTable;
+  post_comment: PostCommentTable;
+  post_like: PostLikeTable;
 
   workflow: WorkflowTable;
   workflow_step: WorkflowStepTable;
