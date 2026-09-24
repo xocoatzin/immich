@@ -2097,6 +2097,123 @@ export type PluginTemplateResponseDto = {
     /** Ui hints, for example "smart-album" */
     uiHints: string[];
 };
+export type PostAttachmentResponseDto = {
+    /** Album ID */
+    albumId: string | null;
+    /** Asset ID */
+    assetId: string | null;
+    /** Attachment position */
+    position: number;
+};
+export type PostResponseDto = {
+    /** Attachments in display order */
+    attachments: PostAttachmentResponseDto[];
+    /** Audience user IDs (null unless viewed by the owner) */
+    audience?: string[] | null;
+    /** Post body (Markdown) */
+    body: string;
+    /** Number of comments */
+    commentCount: number;
+    /** Creation date */
+    createdAt: string;
+    /** Post ID */
+    id: string;
+    /** Whether the requesting user liked the post */
+    isLiked: boolean;
+    /** Number of likes */
+    likeCount: number;
+    /** Post owner */
+    owner: UserResponseDto;
+    /** Last update date */
+    updatedAt: string;
+    visibility: PostVisibility;
+};
+export type PostAttachmentDto = {
+    /** Album ID */
+    albumId?: string;
+    /** Asset ID */
+    assetId?: string;
+};
+export type PostCreateDto = {
+    /** Attachments in display order */
+    attachments?: PostAttachmentDto[];
+    /** Audience user IDs (for specific visibility) */
+    audience?: string[];
+    /** Post body (Markdown) */
+    body: string;
+    visibility?: PostVisibility;
+};
+export type PostUpsertResponseDto = {
+    /** Attachments in display order */
+    attachments: PostAttachmentResponseDto[];
+    /** Audience user IDs (null unless viewed by the owner) */
+    audience?: string[] | null;
+    /** Post body (Markdown) */
+    body: string;
+    /** Number of comments */
+    commentCount: number;
+    /** Creation date */
+    createdAt: string;
+    /** Post ID */
+    id: string;
+    /** Whether the requesting user liked the post */
+    isLiked: boolean;
+    /** Number of likes */
+    likeCount: number;
+    /** Post owner */
+    owner: UserResponseDto;
+    /** Last update date */
+    updatedAt: string;
+    visibility: PostVisibility;
+    /** Attachment/audience mismatch warnings */
+    warnings: string[];
+};
+export type PostValidateDto = {
+    /** Attachments in display order */
+    attachments?: PostAttachmentDto[];
+    /** Audience user IDs (for specific visibility) */
+    audience?: string[];
+    /** Post body (Markdown) */
+    body: string;
+    visibility?: PostVisibility;
+};
+export type PostValidationResponseDto = {
+    /** Attachment/audience mismatch warnings */
+    warnings: string[];
+};
+export type PostUpdateDto = {
+    /** Attachments in display order */
+    attachments?: PostAttachmentDto[];
+    /** Audience user IDs (for specific visibility) */
+    audience?: string[];
+    /** Post body (Markdown) */
+    body?: string;
+    visibility?: PostVisibility;
+};
+export type PostCommentResponseDto = {
+    /** Comment body */
+    body: string;
+    /** Creation date */
+    createdAt: string;
+    /** Nesting depth (1 for top-level comments) */
+    depth: number;
+    /** Comment ID */
+    id: string;
+    /** Parent comment ID (null for top-level comments) */
+    parentId: string | null;
+    /** Post ID */
+    postId: string;
+    /** Last update date */
+    updatedAt: string;
+    /** Comment author */
+    user: UserResponseDto;
+};
+export type PostCommentCreateDto = {
+    /** Comment body */
+    body: string;
+    /** Parent comment ID for replies */
+    parentId?: string;
+};
 export type PublicConfigOAuthDto = {
     /** Auto launch */
     autoLaunch: boolean;
@@ -6266,6 +6383,161 @@ export function getPlugin({ id }: {
     }));
 }
 /**
+ * Retrieve the post feed
+ */
+export function getPosts({ assetId, cursor, limit }: {
+    assetId?: string;
+    cursor?: string;
+    limit?: number;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PostResponseDto[];
+    }>(`/posts${QS.query(QS.explode({
+        assetId,
+        cursor,
+        limit
+    }))}`, {
+        ...opts
+    }));
+}
+/**
+ * Create a post
+ */
+export function createPost({ postCreateDto }: {
+    postCreateDto: PostCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: PostUpsertResponseDto;
+    }>("/posts", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: postCreateDto
+    })));
+}
+/**
+ * Validate a post
+ */
+export function validatePost({ postValidateDto }: {
+    postValidateDto: PostValidateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PostValidationResponseDto;
+    }>("/posts/validate", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: postValidateDto
+    })));
+}
+/**
+ * Delete a post
+ */
+export function deletePost({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/posts/${encodeURIComponent(id)}`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Retrieve a post
+ */
+export function getPost({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PostResponseDto;
+    }>(`/posts/${encodeURIComponent(id)}`, {
+        ...opts
+    }));
+}
+/**
+ * Update a post
+ */
+export function updatePost({ id, postUpdateDto }: {
+    id: string;
+    postUpdateDto: PostUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PostUpsertResponseDto;
+    }>(`/posts/${encodeURIComponent(id)}`, oazapfts.json({
+        ...opts,
+        method: "PATCH",
+        body: postUpdateDto
+    })));
+}
+/**
+ * List post comments
+ */
+export function getPostComments({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PostCommentResponseDto[];
+    }>(`/posts/${encodeURIComponent(id)}/comments`, {
+        ...opts
+    }));
+}
+/**
+ * Comment on a post
+ */
+export function createPostComment({ id, postCommentCreateDto }: {
+    id: string;
+    postCommentCreateDto: PostCommentCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: PostCommentResponseDto;
+    }>(`/posts/${encodeURIComponent(id)}/comments`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: postCommentCreateDto
+    })));
+}
+/**
+ * Delete a post comment
+ */
+export function deletePostComment({ commentId, id }: {
+    commentId: string;
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/posts/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Unlike a post
+ */
+export function unlikePost({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/posts/${encodeURIComponent(id)}/likes`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Like a post
+ */
+export function likePost({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: PostResponseDto;
+    }>(`/posts/${encodeURIComponent(id)}/likes`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
  * Get the public configuration
  */
 export function getPublicConfig(opts?: Oazapfts.RequestOpts) {
@@ -8053,6 +8325,14 @@ export enum Permission {
     PluginRead = "plugin.read",
     PluginUpdate = "plugin.update",
     PluginDelete = "plugin.delete",
+    PostCreate = "post.create",
+    PostRead = "post.read",
+    PostUpdate = "post.update",
+    PostDelete = "post.delete",
+    PostCommentCreate = "postComment.create",
+    PostCommentDelete = "postComment.delete",
+    PostLikeCreate = "postLike.create",
+    PostLikeDelete = "postLike.delete",
     ServerAbout = "server.about",
     ServerApkLinks = "server.apkLinks",
     ServerStorage = "server.storage",
@@ -8236,6 +8516,12 @@ export enum WorkflowTrigger {
     AssetCreate = "AssetCreate",
     AssetMetadataExtraction = "AssetMetadataExtraction",
     AssetTagged = "AssetTagged"
+}
+export enum PostVisibility {
+    Private = "private",
+    Partners = "partners",
+    Specific = "specific",
+    Public = "public"
 }
 export enum QueueJobStatus {
     Active = "active",
