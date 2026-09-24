@@ -28,6 +28,7 @@
     mdiMagnify,
     mdiMap,
     mdiMapOutline,
+    mdiPostOutline,
     mdiTagMultipleOutline,
     mdiToolbox,
     mdiToolboxOutline,
@@ -68,6 +69,8 @@
     icon={mdiAccountMultipleOutline}
     activeIcon={mdiAccountMultiple}
   />
+
+  <NavbarItem title={$t('posts')} href={Route.posts()} icon={mdiPostOutline} />
 
   <NavbarGroup title={$t('library')} size="tiny" />
 

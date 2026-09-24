@@ -101,6 +101,9 @@ export const Route = {
   viewTrashedAsset: ({ id }: { id: string }) => `/trash/photos/${id}`,
   recentlyAdded: () => '/recently-added',
 
+  // posts
+  posts: () => '/posts',
+
   // search
   search: (dto?: MetadataSearchDto | SmartSearchDto) => {
     const metadata = omitBy(dto ?? {}, (value) => value === undefined);
