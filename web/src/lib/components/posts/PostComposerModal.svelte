@@ -20,7 +20,7 @@
   import { mdiAlertOutline, mdiPencilOutline } from '@mdi/js';
   import { onMount } from 'svelte';
   import { t } from 'svelte-i18n';
-  import { SvelteMap } from 'svelte/reactivity';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { handleError } from '$lib/utils/handle-error';
 
   interface Props {
@@ -43,6 +43,13 @@
   const selectedAssets = new SvelteMap<string, AssetResponseDto>();
   const selectedAlbums = new SvelteMap<string, AlbumResponseDto>();
   const audience = new SvelteMap<string, UserResponseDto>();
+  /**
+   * Edit-mode audience IDs that have not (yet) resolved to a user object.
+   * Kept separate from resolved users so the composer never fabricates user
+   * DTOs; the audience picker backfills them on mount and the server
+   * hard-validates the IDs on submit.
+   */
+  const pendingAudienceIds = new SvelteSet<string>();
   /**
    * Edit-mode attachments whose details failed to load (e.g. transient fetch
    * failure). Kept so saving doesn't silently drop them; the server still
@@ -127,21 +134,25 @@
 
   let validateTimer: ReturnType<typeof setTimeout> | undefined;
   let validateSeq = 0;
+  /** All audience IDs, resolved or still pending resolution. */
+  const audienceIds = $derived<string[]>([...audience.keys(), ...pendingAudienceIds]);
   const scheduleValidation = () => {
     clearTimeout(validateTimer);
+    // increment synchronously so a request scheduled before attachments were
+    // removed can never overwrite the cleared warnings when it resolves late
+    const seq = ++validateSeq;
     validateTimer = setTimeout(async () => {
       if (attachments.length === 0) {
         warnings = [];
         return;
       }
-      const seq = ++validateSeq;
       try {
         const result = await validatePost({
           postValidateDto: {
             // schema requires a non-empty body; warnings don't depend on its content
             body: body || 'x',
             visibility,
-            audience: visibility === PostVisibility.Specific ? [...audience.keys()] : undefined,
+            audience: visibility === PostVisibility.Specific ? audienceIds : undefined,
             attachments,
           },
         });
@@ -163,14 +174,15 @@
     void visibility;
     void [...selectedAssets.keys()].join(',');
     void [...selectedAlbums.keys()].join(',');
-    void [...audience.keys()].join(',');
+    void [...unresolvedAttachments.keys()].join(',');
+    void audienceIds.join(',');
     scheduleValidation();
     return () => clearTimeout(validateTimer);
   });
 
   // --- submit ---
 
-  const needsAudience = $derived(visibility === PostVisibility.Specific && audience.size === 0);
+  const needsAudience = $derived(visibility === PostVisibility.Specific && audienceIds.length === 0);
   const canSubmit = $derived(!submitting && body.trim().length > 0 && !needsAudience);
 
   const onSubmit = async () => {
@@ -182,7 +194,7 @@
       const dto = {
         body: body.trim(),
         visibility,
-        audience: visibility === PostVisibility.Specific ? [...audience.keys()] : [],
+        audience: visibility === PostVisibility.Specific ? audienceIds : [],
         attachments,
       };
       const saved = isEdit
@@ -221,15 +233,7 @@
       }
     }
     for (const id of post.audience ?? []) {
-      // stub entries are backfilled with real users by the audience picker on mount
-      audience.set(id, {
-        id,
-        name: id,
-        email: '',
-        profileImagePath: '',
-        avatarColor: 'primary',
-        profileChangedAt: '',
-      } as UserResponseDto);
+      pendingAudienceIds.add(id);
     }
   });
 </script>
@@ -302,7 +306,7 @@
     {#if visibility === PostVisibility.Specific}
       <div class="flex flex-col gap-2">
         <span class="text-sm font-medium">{$t('post_audience')}</span>
-        <PostAudiencePicker selected={audience} />
+        <PostAudiencePicker selected={audience} pendingIds={pendingAudienceIds} />
         {#if needsAudience}
           <p class="text-xs text-yellow-700 dark:text-yellow-400">{$t('post_audience_required')}</p>
         {/if}

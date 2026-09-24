@@ -1727,6 +1727,8 @@
   "post_attachments": "Post attachments",
   "post_audience": "Audience",
   "post_audience_required": "Pick at least one person for specific visibility.",
+  "post_audience_unavailable": "This person is no longer available.",
+  "post_audience_unverified": "Couldn't check availability.",
   "post_body": "Post text",
   "post_by": "Post by {name}",
   "post_comment": "Post comment",

@@ -3,21 +3,24 @@
   import { normalizeSearchString } from '$lib/utils/string-utils';
   import { searchUsers, type UserResponseDto } from '@immich/sdk';
   import { Icon, ListButton, LoadingSpinner } from '@immich/ui';
-  import { mdiClose } from '@mdi/js';
+  import { mdiAccountOffOutline, mdiClockOutline, mdiClose } from '@mdi/js';
   import { sortBy } from 'lodash-es';
   import { onMount } from 'svelte';
   import { t } from 'svelte-i18n';
-  import { SvelteMap } from 'svelte/reactivity';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
   interface Props {
     selected: SvelteMap<string, UserResponseDto>;
+    /** Audience IDs not yet resolved to users; shown as unavailable, never fabricated. */
+    pendingIds: SvelteSet<string>;
   }
 
-  let { selected }: Props = $props();
+  let { selected, pendingIds }: Props = $props();
 
   let search = $state('');
   let users = $state<UserResponseDto[]>([]);
   let loading = $state(true);
+  let loadError = $state(false);
 
   const filteredUsers = $derived(
     sortBy(
@@ -33,20 +36,37 @@
   onMount(async () => {
     try {
       users = await searchUsers();
-      // backfill real user objects for pre-selected (edit-mode) entries
-      for (const user of users) {
-        if (selected.has(user.id)) {
-          selected.set(user.id, user);
-        }
-      }
+    } catch {
+      // without the directory we cannot know whether pending IDs are
+      // unavailable, so leave them unresolved and never label them as such
+      loadError = true;
     } finally {
       loading = false;
     }
   });
+
+  // Resolve pending (edit-mode) IDs to real users whenever the directory or
+  // the pending set changes. The composer populates pendingIds in its own
+  // onMount, which can finish after this picker mounts (e.g. while attachment
+  // details are still loading), so a one-shot resolution here would miss them.
+  // Anything left pending after a successful load is genuinely unavailable.
+  $effect(() => {
+    if (loading || loadError) {
+      return;
+    }
+    for (const user of users) {
+      if (pendingIds.has(user.id)) {
+        pendingIds.delete(user.id);
+        selected.set(user.id, user);
+      }
+    }
+  });
+
+  const removePending = (id: string) => pendingIds.delete(id);
 </script>
 
 <div class="flex flex-col gap-2">
-  {#if selected.size > 0}
+  {#if selected.size > 0 || pendingIds.size > 0}
     <div class="flex flex-wrap gap-2" aria-label={$t('post_audience')}>
       {#each [...selected.values()] as user (user.id)}
         <span
@@ -59,6 +79,25 @@
             class="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
             aria-label={$t('remove_user')}
             onclick={() => remove(user.id)}
+          >
+            <Icon icon={mdiClose} size="14" />
+          </button>
+        </span>
+      {/each}
+      {#each [...pendingIds] as id (id)}
+        <span
+          class="flex items-center gap-1.5 rounded-full bg-immich-fg/10 py-1 pe-2 ps-2 text-sm dark:bg-immich-dark-fg/10"
+          title={id}
+        >
+          <Icon icon={loading || loadError ? mdiClockOutline : mdiAccountOffOutline} size="14" class="opacity-60" />
+          <span class="max-w-40 truncate"
+            >{$t(loading || loadError ? 'post_audience_unverified' : 'post_audience_unavailable')}</span
+          >
+          <button
+            type="button"
+            class="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+            aria-label={$t('remove_user')}
+            onclick={() => removePending(id)}
           >
             <Icon icon={mdiClose} size="14" />
           </button>
