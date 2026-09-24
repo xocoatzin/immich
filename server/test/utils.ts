@@ -54,6 +54,7 @@ import { OcrRepository } from 'src/repositories/ocr.repository.js';
 import { PartnerRepository } from 'src/repositories/partner.repository.js';
 import { PersonRepository } from 'src/repositories/person.repository.js';
 import { PluginRepository } from 'src/repositories/plugin.repository.js';
+import { PostRepository } from 'src/repositories/post.repository.js';
 import { ProcessRepository } from 'src/repositories/process.repository.js';
 import { SearchRepository } from 'src/repositories/search.repository.js';
 import { ServerInfoRepository } from 'src/repositories/server-info.repository.js';
@@ -267,6 +268,7 @@ export type ServiceOverrides = {
   partner: PartnerRepository;
   person: PersonRepository;
   plugin: PluginRepository;
+  post: PostRepository;
   process: ProcessRepository;
   search: SearchRepository;
   serverInfo: ServerInfoRepository;
@@ -353,6 +355,7 @@ export const getMocks = () => {
     partner: automock(PartnerRepository, { strict: false }),
     person: automock(PersonRepository, { strict: false }),
     plugin: automock(PluginRepository, { strict: true, args: [databaseMock, loggerMock] }),
+    post: automock(PostRepository),
     process: automock(ProcessRepository),
     search: automock(SearchRepository, { strict: false }),
     // eslint-disable-next-line no-sparse-arrays

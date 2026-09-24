@@ -33,6 +33,7 @@ import { OcrRepository } from 'src/repositories/ocr.repository.js';
 import { PartnerRepository } from 'src/repositories/partner.repository.js';
 import { PersonRepository } from 'src/repositories/person.repository.js';
 import { PluginRepository } from 'src/repositories/plugin.repository.js';
+import { PostRepository } from 'src/repositories/post.repository.js';
 import { ProcessRepository } from 'src/repositories/process.repository.js';
 import { SearchRepository } from 'src/repositories/search.repository.js';
 import { ServerInfoRepository } from 'src/repositories/server-info.repository.js';
@@ -90,6 +91,7 @@ export const repositories = [
   PartnerRepository,
   PersonRepository,
   PluginRepository,
+  PostRepository,
   ProcessRepository,
   SearchRepository,
   SessionRepository,
