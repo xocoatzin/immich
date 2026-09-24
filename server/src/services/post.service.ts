@@ -179,6 +179,20 @@ export class PostService extends BaseService {
     await this.postRepository.softDeleteComment(commentId);
   }
 
+  async likePost(auth: AuthDto, id: string): Promise<PostResponseDto> {
+    await this.requireAccess({ auth, permission: Permission.PostLikeCreate, ids: [id] });
+    await this.postRepository.createLike({ postId: id, userId: auth.user.id });
+    return this.toResponse(auth, id);
+  }
+
+  async unlikePost(auth: AuthDto, id: string): Promise<void> {
+    // Unlike stays available even if the post is no longer readable: removing
+    // your own like must not require read access. The response carries no post
+    // content (204), so nothing unreadable can leak through this endpoint.
+    await this.requireAccess({ auth, permission: Permission.PostLikeDelete, ids: [id] });
+    await this.postRepository.deleteLike(id, auth.user.id);
+  }
+
   /** Depth of an existing comment: 1 for a top-level comment. Existing comments never exceed the maximum. */
   private async getCommentDepth(comment: { parentId: string | null }): Promise<number> {
     let depth = 1;

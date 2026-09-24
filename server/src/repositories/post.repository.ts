@@ -7,6 +7,7 @@ import { ChunkedArray, ChunkedSet, DummyValue, GenerateSql } from 'src/decorator
 import { PostVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import { PostCommentTable } from 'src/schema/tables/post-comment.table.js';
+import { PostLikeTable } from 'src/schema/tables/post-like.table.js';
 import { PostTable } from 'src/schema/tables/post.table.js';
 import { asUuid } from 'src/utils/database.js';
 
@@ -342,6 +343,30 @@ export class PostRepository {
       .updateTable('post_comment')
       .set({ deletedAt: new Date() })
       .where('post_comment.id', 'in', (eb) => eb.selectFrom('thread').select('thread.id'))
+      .execute();
+  }
+
+  /**
+   * Like a post. Liking a post that is already liked is a no-op.
+   */
+  @GenerateSql({ params: [{ postId: DummyValue.UUID, userId: DummyValue.UUID }] })
+  async createLike(data: Insertable<PostLikeTable>) {
+    await this.db
+      .insertInto('post_like')
+      .values(data)
+      .onConflict((oc) => oc.columns(['postId', 'userId']).doNothing())
+      .execute();
+  }
+
+  /**
+   * Remove a user's like from a post.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  async deleteLike(postId: string, userId: string) {
+    await this.db
+      .deleteFrom('post_like')
+      .where('post_like.postId', '=', asUuid(postId))
+      .where('post_like.userId', '=', asUuid(userId))
       .execute();
   }
 

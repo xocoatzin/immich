@@ -340,6 +340,19 @@ where
       "thread"
   )
 
+-- PostRepository.createLike
+insert into
+  "post_like" ("postId", "userId")
+values
+  ($1, $2)
+on conflict ("postId", "userId") do nothing
+
+-- PostRepository.deleteLike
+delete from "post_like"
+where
+  "post_like"."postId" = $1::uuid
+  and "post_like"."userId" = $2::uuid
+
 -- PostRepository.createWithDetails
 begin
 insert into

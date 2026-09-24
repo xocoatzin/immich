@@ -1171,4 +1171,78 @@ describe(PostService.name, () => {
       expect(mocks.post.softDeleteComment).not.toHaveBeenCalled();
     });
   });
+
+  describe('likePost', () => {
+    it('should like a post and return it with updated like state', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const row = newPostRow(newUuid(), { id: postId, likeCount: 1 });
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.createLike.mockResolvedValue(undefined);
+      mocks.post.getById.mockResolvedValue(row);
+      mockEmptyHydration(mocks);
+      mocks.post.getLikedPostIds.mockResolvedValue(new Set([postId]));
+
+      const result = await sut.likePost(auth, postId);
+
+      expect(mocks.post.createLike).toHaveBeenCalledWith({ postId, userId });
+      expect(result.id).toBe(postId);
+      expect(result.likeCount).toBe(1);
+      expect(result.isLiked).toBe(true);
+    });
+
+    it('should reject when the user may not read the post', async () => {
+      const auth = AuthFactory.create();
+      const postId = newUuid();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set());
+
+      await expect(sut.likePost(auth, postId)).rejects.toThrow(BadRequestException);
+      expect(mocks.post.createLike).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unlikePost', () => {
+    it('should unlike a post', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      mocks.access.post.checkLikeOwnerAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.deleteLike.mockResolvedValue(undefined);
+
+      await sut.unlikePost(auth, postId);
+
+      expect(mocks.post.deleteLike).toHaveBeenCalledWith(postId, userId);
+      expect(mocks.post.getById).not.toHaveBeenCalled();
+    });
+
+    it('should unlike a post the user can no longer read without leaking it', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      // the like row outlived the visibility change; read access is gone
+      mocks.access.post.checkLikeOwnerAccess.mockResolvedValue(new Set([postId]));
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set());
+      mocks.post.deleteLike.mockResolvedValue(undefined);
+
+      await sut.unlikePost(auth, postId);
+
+      expect(mocks.post.deleteLike).toHaveBeenCalledWith(postId, userId);
+      expect(mocks.post.getById).not.toHaveBeenCalled();
+    });
+
+    it('should reject when the user has not liked the post', async () => {
+      const auth = AuthFactory.create();
+      const postId = newUuid();
+
+      mocks.access.post.checkLikeOwnerAccess.mockResolvedValue(new Set());
+
+      await expect(sut.unlikePost(auth, postId)).rejects.toThrow(BadRequestException);
+      expect(mocks.post.deleteLike).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -265,4 +265,36 @@ describe(PostController.name, () => {
       expect(service.deleteComment).toHaveBeenCalled();
     });
   });
+
+  describe('POST /posts/:id/likes', () => {
+    it('should require a valid id', async () => {
+      const { status, body } = await request(ctx.getHttpServer()).post('/posts/invalid/likes');
+      expect(status).toBe(400);
+      expect(body).toEqual(errorDto.validationError([{ path: ['id'], message: 'Invalid UUID' }]));
+      expect(service.likePost).not.toHaveBeenCalled();
+    });
+
+    it('should like the post', async () => {
+      const id = factory.uuid();
+      const { status } = await request(ctx.getHttpServer()).post(`/posts/${id}/likes`);
+      expect(status).toBe(201);
+      expect(service.likePost).toHaveBeenCalledWith(undefined, id);
+    });
+  });
+
+  describe('DELETE /posts/:id/likes', () => {
+    it('should require a valid id', async () => {
+      const { status, body } = await request(ctx.getHttpServer()).delete('/posts/invalid/likes');
+      expect(status).toBe(400);
+      expect(body).toEqual(errorDto.validationError([{ path: ['id'], message: 'Invalid UUID' }]));
+      expect(service.unlikePost).not.toHaveBeenCalled();
+    });
+
+    it('should unlike the post', async () => {
+      const id = factory.uuid();
+      const { status } = await request(ctx.getHttpServer()).delete(`/posts/${id}/likes`);
+      expect(status).toBe(204);
+      expect(service.unlikePost).toHaveBeenCalledWith(undefined, id);
+    });
+  });
 });

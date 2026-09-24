@@ -134,4 +134,27 @@ export class PostController {
   async deletePostComment(@Auth() auth: AuthDto, @Param() { id, commentId }: PostCommentParamDto): Promise<void> {
     await this.service.deleteComment(auth, id, commentId);
   }
+
+  @Post(':id/likes')
+  @Authenticated({ permission: Permission.PostLikeCreate })
+  @Endpoint({
+    summary: 'Like a post',
+    description: 'Like a post. Liking a post that is already liked has no effect.',
+    history: new HistoryBuilder().added('v3.0.0').alpha('v3.0.0'),
+  })
+  likePost(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<PostResponseDto> {
+    return this.service.likePost(auth, id);
+  }
+
+  @Delete(':id/likes')
+  @Authenticated({ permission: Permission.PostLikeDelete })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Endpoint({
+    summary: 'Unlike a post',
+    description: "Remove the authenticated user's like from a post.",
+    history: new HistoryBuilder().added('v3.0.0').alpha('v3.0.0'),
+  })
+  async unlikePost(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<void> {
+    await this.service.unlikePost(auth, id);
+  }
 }
