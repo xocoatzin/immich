@@ -244,6 +244,102 @@ where
 order by
   "post_audience"."userId" asc
 
+-- PostRepository.createComment
+insert into
+  "post_comment" ("postId", "userId", "body", "parentId")
+values
+  ($1, $2, $3, $4)
+returning
+  *
+
+-- PostRepository.getCommentById
+select
+  "post_comment".*,
+  (
+    select
+      to_json(obj)
+    from
+      (
+        select
+          "id",
+          "name",
+          "email",
+          "avatarColor",
+          "profileImagePath",
+          "profileChangedAt"
+        from
+          "user"
+        where
+          "user"."id" = "post_comment"."userId"
+      ) as obj
+  ) as "user"
+from
+  "post_comment"
+  inner join "user" as "author" on "author"."id" = "post_comment"."userId"
+  and "author"."deletedAt" is null
+where
+  "post_comment"."id" = $1::uuid
+  and "post_comment"."deletedAt" is null
+
+-- PostRepository.getCommentsByPost
+select
+  "post_comment".*,
+  (
+    select
+      to_json(obj)
+    from
+      (
+        select
+          "id",
+          "name",
+          "email",
+          "avatarColor",
+          "profileImagePath",
+          "profileChangedAt"
+        from
+          "user"
+        where
+          "user"."id" = "post_comment"."userId"
+      ) as obj
+  ) as "user"
+from
+  "post_comment"
+  inner join "user" as "author" on "author"."id" = "post_comment"."userId"
+  and "author"."deletedAt" is null
+where
+  "post_comment"."postId" = $1::uuid
+  and "post_comment"."deletedAt" is null
+order by
+  "post_comment"."createdAt" asc,
+  "post_comment"."id" asc
+
+-- PostRepository.softDeleteComment
+with recursive
+  "thread" ("id") as (
+    select
+      "post_comment"."id" as "id"
+    from
+      "post_comment"
+    where
+      "post_comment"."id" = $1::uuid
+    union all
+    select
+      "reply"."id" as "id"
+    from
+      "post_comment" as "reply"
+      inner join "thread" as "parent" on "parent"."id" = "reply"."parentId"
+  )
+update "post_comment"
+set
+  "deletedAt" = $2
+where
+  "post_comment"."id" in (
+    select
+      "thread"."id"
+    from
+      "thread"
+  )
+
 -- PostRepository.createWithDetails
 begin
 insert into

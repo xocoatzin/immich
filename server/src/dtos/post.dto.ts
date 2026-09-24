@@ -94,6 +94,46 @@ const PostValidationResponseSchema = z
   .describe('Post validation response')
   .meta({ id: 'PostValidationResponseDto' });
 
+export const PostCommentCreateSchema = z
+  .object({
+    body: z.string().trim().min(1).max(5000).describe('Comment body'),
+    parentId: z.uuidv4().optional().describe('Parent comment ID for replies'),
+  })
+  .describe('Post comment create')
+  .meta({ id: 'PostCommentCreateDto' });
+
+const PostCommentParamSchema = z.object({
+  id: z.uuidv4().describe('Post ID'),
+  commentId: z.uuidv4().describe('Comment ID'),
+});
+
+const PostCommentResponseSchema = z
+  .object({
+    id: z.uuidv4().describe('Comment ID'),
+    postId: z.uuidv4().describe('Post ID'),
+    parentId: z.uuidv4().nullable().describe('Parent comment ID (null for top-level comments)'),
+    depth: z.int().min(1).max(3).describe('Nesting depth (1 for top-level comments)'),
+    body: z.string().describe('Comment body'),
+    createdAt: isoDatetimeToDate.describe('Creation date'),
+    updatedAt: isoDatetimeToDate.describe('Last update date'),
+    user: UserResponseSchema.describe('Comment author'),
+  })
+  .describe('Post comment response')
+  .meta({ id: 'PostCommentResponseDto' });
+
+export type PostCommentWithUser = Awaited<ReturnType<PostRepository['getCommentsByPost']>>[number];
+
+export const mapPostComment = (comment: PostCommentWithUser, depth: number): PostCommentResponseDto => ({
+  id: comment.id,
+  postId: comment.postId,
+  parentId: comment.parentId,
+  depth,
+  body: comment.body,
+  createdAt: comment.createdAt,
+  updatedAt: comment.updatedAt,
+  user: mapUser(comment.user),
+});
+
 export type PostWithDetails =
   | NonNullable<Awaited<ReturnType<PostRepository['getById']>>>
   | Awaited<ReturnType<PostRepository['getFeed']>>[number]
@@ -130,3 +170,6 @@ export class PostValidateDto extends createZodDto(PostValidateSchema) {}
 export class PostResponseDto extends createZodDto(PostResponseSchema) {}
 export class PostUpsertResponseDto extends createZodDto(PostUpsertResponseSchema) {}
 export class PostValidationResponseDto extends createZodDto(PostValidationResponseSchema) {}
+export class PostCommentCreateDto extends createZodDto(PostCommentCreateSchema) {}
+export class PostCommentParamDto extends createZodDto(PostCommentParamSchema) {}
+export class PostCommentResponseDto extends createZodDto(PostCommentResponseSchema) {}

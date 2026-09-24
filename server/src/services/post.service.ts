@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthDto } from 'src/dtos/auth.dto.js';
 import {
   PostAttachmentDto,
+  PostCommentCreateDto,
+  PostCommentResponseDto,
+  PostCommentWithUser,
   PostCreateDto,
   PostFeedDto,
   PostResponseDto,
@@ -11,6 +14,7 @@ import {
   PostValidationResponseDto,
   PostWithDetails,
   mapPost,
+  mapPostComment,
 } from 'src/dtos/post.dto.js';
 import { AlbumUserRole, Permission, PostVisibility } from 'src/enum.js';
 import { type PostUpdateDetails } from 'src/repositories/post.repository.js';
@@ -20,6 +24,9 @@ import { setUnion } from 'src/utils/set.js';
 
 @Injectable()
 export class PostService extends BaseService {
+  /** Comments nest at most three levels deep: a comment, a reply, and a reply to a reply. */
+  private static readonly maxCommentDepth = 3;
+
   async create(auth: AuthDto, dto: PostCreateDto): Promise<PostUpsertResponseDto> {
     await this.requireAccess({ auth, permission: Permission.PostCreate, ids: [auth.user.id] });
 
@@ -125,6 +132,99 @@ export class PostService extends BaseService {
     const audience = visibility === PostVisibility.Specific ? await this.requireValidAudience(dto.audience) : [];
     const warnings = await this.getAttachmentWarnings(auth, { visibility, audience, attachments });
     return { warnings };
+  }
+
+  async getComments(auth: AuthDto, postId: string): Promise<PostCommentResponseDto[]> {
+    await this.requireAccess({ auth, permission: Permission.PostRead, ids: [postId] });
+    const comments = await this.postRepository.getCommentsByPost(postId);
+    return this.toThreadedComments(comments);
+  }
+
+  async createComment(auth: AuthDto, postId: string, dto: PostCommentCreateDto): Promise<PostCommentResponseDto> {
+    await this.requireAccess({ auth, permission: Permission.PostCommentCreate, ids: [postId] });
+
+    let parentId: string | null = null;
+    let depth = 1;
+    if (dto.parentId) {
+      const parent = await findOrFail(() => this.postRepository.getCommentById(dto.parentId!), 'Comment');
+      if (parent.postId !== postId) {
+        // Same shape as the other comment lookups: never reveal whether the
+        // parent exists on a different post or does not exist at all.
+        throw new NotFoundException('Comment not found');
+      }
+      depth = (await this.getCommentDepth(parent)) + 1;
+      if (depth > PostService.maxCommentDepth) {
+        throw new BadRequestException(`Comments cannot be nested more than ${PostService.maxCommentDepth} levels deep`);
+      }
+      parentId = parent.id;
+    }
+
+    const comment = await this.postRepository.createComment({
+      postId,
+      userId: auth.user.id,
+      body: dto.body,
+      parentId,
+    });
+
+    const created = await findOrFail(() => this.postRepository.getCommentById(comment.id), 'Comment');
+    return mapPostComment(created, depth);
+  }
+
+  async deleteComment(auth: AuthDto, postId: string, commentId: string): Promise<void> {
+    const comment = await findOrFail(() => this.postRepository.getCommentById(commentId), 'Comment');
+    if (comment.postId !== postId) {
+      throw new NotFoundException('Comment not found');
+    }
+    await this.requireAccess({ auth, permission: Permission.PostCommentDelete, ids: [commentId] });
+    await this.postRepository.softDeleteComment(commentId);
+  }
+
+  /** Depth of an existing comment: 1 for a top-level comment. Existing comments never exceed the maximum. */
+  private async getCommentDepth(comment: { parentId: string | null }): Promise<number> {
+    let depth = 1;
+    let parentId = comment.parentId;
+    while (parentId) {
+      // Cycles are impossible through the API (parentId is write-once and always
+      // references a pre-existing row), but a corrupted chain must not spin forever.
+      if (depth > PostService.maxCommentDepth) {
+        throw new BadRequestException('Comment thread is too deep');
+      }
+      depth += 1;
+      const parent = await findOrFail(() => this.postRepository.getCommentById(parentId!), 'Comment');
+      parentId = parent.parentId;
+    }
+    return depth;
+  }
+
+  /**
+   * Arrange flat comments into threaded display order: each top-level comment
+   * (oldest first) followed by its replies, depth-first.
+   *
+   * Comments whose parent is absent from the set are dropped. Unreachable in
+   * practice (FK integrity plus subtree soft-delete), but never render orphans.
+   */
+  private toThreadedComments(comments: PostCommentWithUser[]): PostCommentResponseDto[] {
+    // Oldest first; ties broken by id so the display order is deterministic
+    // regardless of the order the repository returned.
+    const ordered = [...comments].sort(
+      (a, b) => +a.createdAt - +b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
+    const repliesByParent = new Map<string | null, PostCommentWithUser[]>();
+    for (const comment of ordered) {
+      const siblings = repliesByParent.get(comment.parentId) ?? [];
+      siblings.push(comment);
+      repliesByParent.set(comment.parentId, siblings);
+    }
+
+    const threaded: PostCommentResponseDto[] = [];
+    const visit = (parentId: string | null, depth: number): void => {
+      for (const comment of repliesByParent.get(parentId) ?? []) {
+        threaded.push(mapPostComment(comment, depth));
+        visit(comment.id, depth + 1);
+      }
+    };
+    visit(null, 1);
+    return threaded;
   }
 
   private async toResponse(auth: AuthDto, postOrId: PostWithDetails | string): Promise<PostResponseDto> {

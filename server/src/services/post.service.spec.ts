@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PostVisibility, UserAvatarColor } from 'src/enum.js';
 import { PartnerRepository } from 'src/repositories/partner.repository.js';
 import { PostRepository } from 'src/repositories/post.repository.js';
@@ -35,6 +35,30 @@ const newPostRow = (ownerId: string, overrides: Partial<PostRow> = {}): PostRow 
 
 const newPartnerRow = (sharedById: string, sharedWithId: string): PartnerRow =>
   ({ sharedById, sharedWithId }) as PartnerRow;
+
+type CommentRow = NonNullable<Awaited<ReturnType<PostRepository['getCommentById']>>>;
+
+const newCommentRow = (postId: string, userId: string, overrides: Record<string, unknown> = {}): CommentRow =>
+  ({
+    id: newUuid(),
+    postId,
+    parentId: null,
+    userId,
+    body: 'comment body',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    updateId: newUuid(),
+    user: {
+      id: userId,
+      email: 'comment@test.com',
+      name: 'Commenter',
+      avatarColor: UserAvatarColor.Primary,
+      profileChangedAt: new Date().toISOString(),
+      profileImagePath: '',
+    },
+    ...overrides,
+  }) as CommentRow;
 
 const mockEmptyHydration = (mocks: ServiceMocks) => {
   mocks.post.getAttachmentsForPosts.mockResolvedValue([]);
@@ -917,6 +941,234 @@ describe(PostService.name, () => {
           PostService['validate']
         >[1]),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getComments', () => {
+    it('should return comments in threaded order with depths', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const base = Date.now();
+      const first = newCommentRow(postId, userId, { createdAt: new Date(base) });
+      const reply = newCommentRow(postId, newUuid(), { parentId: first.id, createdAt: new Date(base + 2000) });
+      const second = newCommentRow(postId, newUuid(), { createdAt: new Date(base + 1000) });
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      // Deliberately scrambled: the service must sort oldest-first, then group depth-first.
+      mocks.post.getCommentsByPost.mockResolvedValue([reply, second, first]);
+
+      const results = await sut.getComments(auth, postId);
+
+      expect(results).toHaveLength(3);
+      expect(results.map(({ id }) => id)).toEqual([first.id, reply.id, second.id]);
+      expect(results.map(({ depth }) => depth)).toEqual([1, 2, 1]);
+      expect(results[1].parentId).toBe(first.id);
+      expect(mocks.post.getCommentsByPost).toHaveBeenCalledWith(postId);
+    });
+
+    it('should return an empty list when there are no comments', async () => {
+      const postId = newUuid();
+      const auth = AuthFactory.create();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentsByPost.mockResolvedValue([]);
+
+      await expect(sut.getComments(auth, postId)).resolves.toEqual([]);
+    });
+
+    it('should reject when the post is not readable', async () => {
+      const auth = AuthFactory.create();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set());
+
+      await expect(sut.getComments(auth, newUuid())).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('createComment', () => {
+    it('should create a top-level comment', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const created = { id: newUuid() } as Awaited<ReturnType<PostRepository['createComment']>>;
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.createComment.mockResolvedValue(created);
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(postId, userId, { id: created.id, body: 'hello' }));
+
+      const result = await sut.createComment(auth, postId, { body: 'hello' });
+
+      expect(mocks.post.createComment).toHaveBeenCalledWith({ postId, userId, body: 'hello', parentId: null });
+      expect(result.depth).toBe(1);
+      expect(result.parentId).toBeNull();
+      expect(result.user.id).toBe(userId);
+    });
+
+    it('should create a reply within the nesting limit', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const parentId = newUuid();
+      const created = { id: newUuid() } as Awaited<ReturnType<PostRepository['createComment']>>;
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentById.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === parentId
+            ? newCommentRow(postId, newUuid(), { id: parentId })
+            : newCommentRow(postId, userId, { id: created.id, parentId, body: 'reply' }),
+        ),
+      );
+      mocks.post.createComment.mockResolvedValue(created);
+
+      const result = await sut.createComment(auth, postId, { body: 'reply', parentId });
+
+      expect(mocks.post.createComment).toHaveBeenCalledWith({ postId, userId, body: 'reply', parentId });
+      expect(result.depth).toBe(2);
+    });
+
+    it('should allow a reply at exactly the maximum depth', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const parentId = newUuid();
+      const grandparentId = newUuid();
+      const created = { id: newUuid() } as Awaited<ReturnType<PostRepository['createComment']>>;
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentById.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === parentId
+            ? newCommentRow(postId, newUuid(), { id: parentId, parentId: grandparentId })
+            : id === grandparentId
+              ? newCommentRow(postId, newUuid(), { id: grandparentId, parentId: null })
+              : newCommentRow(postId, userId, { id: created.id, parentId, body: 'depth three' }),
+        ),
+      );
+      mocks.post.createComment.mockResolvedValue(created);
+
+      const result = await sut.createComment(auth, postId, { body: 'depth three', parentId });
+
+      expect(result.depth).toBe(3);
+      expect(mocks.post.createComment).toHaveBeenCalledWith({
+        postId,
+        userId,
+        body: 'depth three',
+        parentId,
+      });
+    });
+
+    it('should reject a reply to a deleted parent', async () => {
+      const postId = newUuid();
+      const auth = AuthFactory.create();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentById.mockResolvedValue(undefined);
+
+      await expect(sut.createComment(auth, postId, { body: 'reply', parentId: newUuid() })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mocks.post.createComment).not.toHaveBeenCalled();
+    });
+
+    it('should reject a reply to a comment on another post', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(newUuid(), newUuid()));
+
+      await expect(sut.createComment(auth, postId, { body: 'reply', parentId: newUuid() })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mocks.post.createComment).not.toHaveBeenCalled();
+    });
+
+    it('should reject nesting beyond three levels', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+      const parentId = newUuid();
+      const midId = newUuid();
+      const grandparentId = newUuid();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set([postId]));
+      mocks.post.getCommentById.mockImplementation((id: string) => {
+        const parentOf = id === parentId ? midId : id === midId ? grandparentId : null;
+        return Promise.resolve(newCommentRow(postId, newUuid(), { id, parentId: parentOf }));
+      });
+
+      await expect(sut.createComment(auth, postId, { body: 'too deep', parentId })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mocks.post.createComment).not.toHaveBeenCalled();
+    });
+
+    it('should reject when the post is not readable', async () => {
+      const auth = AuthFactory.create();
+
+      mocks.access.post.checkReadAccess.mockResolvedValue(new Set());
+
+      await expect(sut.createComment(auth, newUuid(), { body: 'hello' })).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('deleteComment', () => {
+    it('should delete a comment the user may delete', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const commentId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(postId, userId, { id: commentId }));
+      mocks.access.post.checkCommentOwnerAccess.mockResolvedValue(new Set([commentId]));
+      mocks.access.post.checkCommentPostOwnerAccess.mockResolvedValue(new Set());
+      mocks.post.softDeleteComment.mockResolvedValue(undefined);
+
+      await sut.deleteComment(auth, postId, commentId);
+
+      expect(mocks.post.softDeleteComment).toHaveBeenCalledWith(commentId);
+    });
+
+    it('should let the post owner delete a comment', async () => {
+      const userId = newUuid();
+      const postId = newUuid();
+      const commentId = newUuid();
+      const auth = AuthFactory.create({ id: userId });
+
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(postId, newUuid(), { id: commentId }));
+      mocks.access.post.checkCommentOwnerAccess.mockResolvedValue(new Set());
+      mocks.access.post.checkCommentPostOwnerAccess.mockResolvedValue(new Set([commentId]));
+      mocks.post.softDeleteComment.mockResolvedValue(undefined);
+
+      await sut.deleteComment(auth, postId, commentId);
+
+      expect(mocks.post.softDeleteComment).toHaveBeenCalledWith(commentId);
+    });
+
+    it('should reject a comment on another post', async () => {
+      const postId = newUuid();
+      const auth = AuthFactory.create();
+
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(newUuid(), newUuid()));
+
+      await expect(sut.deleteComment(auth, postId, newUuid())).rejects.toThrow(NotFoundException);
+      expect(mocks.post.softDeleteComment).not.toHaveBeenCalled();
+    });
+
+    it('should reject when the user may not delete the comment', async () => {
+      const postId = newUuid();
+      const commentId = newUuid();
+      const auth = AuthFactory.create();
+
+      mocks.post.getCommentById.mockResolvedValue(newCommentRow(postId, newUuid(), { id: commentId }));
+      mocks.access.post.checkCommentOwnerAccess.mockResolvedValue(new Set());
+      mocks.access.post.checkCommentPostOwnerAccess.mockResolvedValue(new Set());
+
+      await expect(sut.deleteComment(auth, postId, commentId)).rejects.toThrow(BadRequestException);
+      expect(mocks.post.softDeleteComment).not.toHaveBeenCalled();
     });
   });
 });

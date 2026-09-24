@@ -182,4 +182,87 @@ describe(PostController.name, () => {
       expect(service.delete).toHaveBeenCalled();
     });
   });
+
+  describe('GET /posts/:id/comments', () => {
+    it('should require a valid id', async () => {
+      const { status, body } = await request(ctx.getHttpServer()).get('/posts/invalid/comments');
+      expect(status).toBe(400);
+      expect(body).toEqual(errorDto.validationError([{ path: ['id'], message: 'Invalid UUID' }]));
+    });
+
+    it('should list the comments', async () => {
+      const { status } = await request(ctx.getHttpServer()).get(`/posts/${factory.uuid()}/comments`);
+      expect(status).toBe(200);
+      expect(service.getComments).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /posts/:id/comments', () => {
+    it('should require a valid id', async () => {
+      const { status, body } = await request(ctx.getHttpServer()).post('/posts/invalid/comments').send({ body: 'hi' });
+      expect(status).toBe(400);
+      expect(body).toEqual(errorDto.validationError([{ path: ['id'], message: 'Invalid UUID' }]));
+    });
+
+    it('should require a body', async () => {
+      const { status } = await request(ctx.getHttpServer()).post(`/posts/${factory.uuid()}/comments`).send({});
+      expect(status).toBe(400);
+      expect(service.createComment).not.toHaveBeenCalled();
+    });
+
+    it('should reject an empty body', async () => {
+      const { status } = await request(ctx.getHttpServer())
+        .post(`/posts/${factory.uuid()}/comments`)
+        .send({ body: ' '.repeat(3) });
+      expect(status).toBe(400);
+    });
+
+    it('should reject an invalid parent id', async () => {
+      const { status, body } = await request(ctx.getHttpServer())
+        .post(`/posts/${factory.uuid()}/comments`)
+        .send({ body: 'hi', parentId: 'not-a-uuid' });
+      expect(status).toBe(400);
+      expect(body).toEqual(errorDto.validationError([{ path: ['parentId'], message: 'Invalid UUID' }]));
+      expect(service.createComment).not.toHaveBeenCalled();
+    });
+
+    it('should create a comment', async () => {
+      const postId = factory.uuid();
+      const { status } = await request(ctx.getHttpServer())
+        .post(`/posts/${postId}/comments`)
+        .send({ body: 'nice shot' });
+      expect(status).toBe(201);
+      expect(service.createComment).toHaveBeenCalledWith(undefined, postId, { body: 'nice shot' });
+    });
+
+    it('should create a reply', async () => {
+      const parentId = factory.uuid();
+      const { status } = await request(ctx.getHttpServer())
+        .post(`/posts/${factory.uuid()}/comments`)
+        .send({ body: 'agreed', parentId });
+      expect(status).toBe(201);
+      expect(service.createComment).toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /posts/:id/comments/:commentId', () => {
+    it('should require valid ids', async () => {
+      const { status, body } = await request(ctx.getHttpServer()).delete('/posts/invalid/comments/invalid');
+      expect(status).toBe(400);
+      expect(body).toEqual(
+        errorDto.validationError([
+          { path: ['id'], message: 'Invalid UUID' },
+          { path: ['commentId'], message: 'Invalid UUID' },
+        ]),
+      );
+    });
+
+    it('should delete the comment', async () => {
+      const { status } = await request(ctx.getHttpServer()).delete(
+        `/posts/${factory.uuid()}/comments/${factory.uuid()}`,
+      );
+      expect(status).toBe(204);
+      expect(service.deleteComment).toHaveBeenCalled();
+    });
+  });
 });

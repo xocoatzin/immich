@@ -6,6 +6,7 @@ import { columns } from 'src/database.js';
 import { ChunkedArray, ChunkedSet, DummyValue, GenerateSql } from 'src/decorators.js';
 import { PostVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
+import { PostCommentTable } from 'src/schema/tables/post-comment.table.js';
 import { PostTable } from 'src/schema/tables/post.table.js';
 import { asUuid } from 'src/utils/database.js';
 
@@ -257,6 +258,91 @@ export class PostRepository {
       .orderBy('post_audience.userId', 'asc')
       .execute();
     return rows.map((row) => row.userId);
+  }
+
+  /**
+   * Create a comment on a post. The caller must validate the parent comment
+   * (same post, within the nesting limit) before calling this.
+   */
+  @GenerateSql({
+    params: [{ postId: DummyValue.UUID, userId: DummyValue.UUID, body: DummyValue.STRING, parentId: DummyValue.UUID }],
+  })
+  createComment(data: Insertable<PostCommentTable>) {
+    return this.db.insertInto('post_comment').values(data).returningAll().executeTakeFirstOrThrow();
+  }
+
+  /**
+   * A single non-deleted comment with its author. Used for parent validation
+   * and for hydrating create responses.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getCommentById(id: string) {
+    return this.db
+      .selectFrom('post_comment')
+      .innerJoin('user as author', (join) =>
+        join.onRef('author.id', '=', 'post_comment.userId').on('author.deletedAt', 'is', null),
+      )
+      .selectAll('post_comment')
+      .select((eb) => [
+        jsonObjectFrom(eb.selectFrom('user').select(columns.user).whereRef('user.id', '=', 'post_comment.userId')).as(
+          'user',
+        ),
+      ])
+      .$narrowType<{ user: NotNull }>()
+      .where('post_comment.id', '=', asUuid(id))
+      .where('post_comment.deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  /**
+   * All non-deleted comments on a post with their authors, oldest first.
+   * The service arranges them into threads.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getCommentsByPost(postId: string) {
+    return this.db
+      .selectFrom('post_comment')
+      .innerJoin('user as author', (join) =>
+        join.onRef('author.id', '=', 'post_comment.userId').on('author.deletedAt', 'is', null),
+      )
+      .selectAll('post_comment')
+      .select((eb) => [
+        jsonObjectFrom(eb.selectFrom('user').select(columns.user).whereRef('user.id', '=', 'post_comment.userId')).as(
+          'user',
+        ),
+      ])
+      .$narrowType<{ user: NotNull }>()
+      .where('post_comment.postId', '=', asUuid(postId))
+      .where('post_comment.deletedAt', 'is', null)
+      .orderBy('post_comment.createdAt', 'asc')
+      .orderBy('post_comment.id', 'asc')
+      .execute();
+  }
+
+  /**
+   * Soft-delete a comment and all of its replies, so no orphaned replies
+   * stay visible under a deleted parent.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async softDeleteComment(id: string) {
+    await this.db
+      .withRecursive('thread(id)', (qb) => {
+        const root = qb
+          .selectFrom('post_comment')
+          .select('post_comment.id as id')
+          .where('post_comment.id', '=', asUuid(id));
+
+        const replies = qb
+          .selectFrom('post_comment as reply')
+          .innerJoin('thread as parent', 'parent.id', 'reply.parentId')
+          .select('reply.id as id');
+
+        return root.unionAll(replies);
+      })
+      .updateTable('post_comment')
+      .set({ deletedAt: new Date() })
+      .where('post_comment.id', 'in', (eb) => eb.selectFrom('thread').select('thread.id'))
+      .execute();
   }
 
   /**

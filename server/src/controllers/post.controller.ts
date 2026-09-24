@@ -3,6 +3,9 @@ import { ApiTags } from '@nestjs/swagger';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
 import { Endpoint, HistoryBuilder } from 'src/decorators.js';
 import {
+  PostCommentCreateDto,
+  PostCommentParamDto,
+  PostCommentResponseDto,
   PostCreateDto,
   PostFeedDto,
   PostResponseDto,
@@ -92,5 +95,43 @@ export class PostController {
   })
   deletePost(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<void> {
     return this.service.delete(auth, id);
+  }
+
+  @Get(':id/comments')
+  @Authenticated({ permission: Permission.PostRead })
+  @Endpoint({
+    summary: 'List post comments',
+    description: 'List comments on a post in depth-first threaded order, oldest first.',
+    history: new HistoryBuilder().added('v3.0.0').alpha('v3.0.0'),
+  })
+  getPostComments(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<PostCommentResponseDto[]> {
+    return this.service.getComments(auth, id);
+  }
+
+  @Post(':id/comments')
+  @Authenticated({ permission: Permission.PostCommentCreate })
+  @Endpoint({
+    summary: 'Comment on a post',
+    description: 'Create a comment on a post. Replies nest at most three levels deep.',
+    history: new HistoryBuilder().added('v3.0.0').alpha('v3.0.0'),
+  })
+  createPostComment(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: PostCommentCreateDto,
+  ): Promise<PostCommentResponseDto> {
+    return this.service.createComment(auth, id, dto);
+  }
+
+  @Delete(':id/comments/:commentId')
+  @Authenticated({ permission: Permission.PostCommentDelete })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Endpoint({
+    summary: 'Delete a post comment',
+    description: 'Delete a comment and its replies. The comment author or the post owner may delete it.',
+    history: new HistoryBuilder().added('v3.0.0').alpha('v3.0.0'),
+  })
+  async deletePostComment(@Auth() auth: AuthDto, @Param() { id, commentId }: PostCommentParamDto): Promise<void> {
+    await this.service.deleteComment(auth, id, commentId);
   }
 }

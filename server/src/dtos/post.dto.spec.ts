@@ -1,4 +1,12 @@
-import { PostCreateSchema, PostFeedSchema, PostUpdateSchema, PostValidateSchema, mapPost } from 'src/dtos/post.dto.js';
+import {
+  PostCommentCreateSchema,
+  PostCreateSchema,
+  PostFeedSchema,
+  PostUpdateSchema,
+  PostValidateSchema,
+  mapPost,
+  mapPostComment,
+} from 'src/dtos/post.dto.js';
 import { PostVisibility } from 'src/enum.js';
 import { newUuid } from 'test/small.factory.js';
 
@@ -145,6 +153,64 @@ describe('post DTOs', () => {
       expect(result.commentCount).toBe(0);
       expect(result.isLiked).toBe(true);
       expect(result.audience).toBeNull();
+    });
+  });
+
+  describe('PostCommentCreateSchema', () => {
+    it('should accept a body without a parent', () => {
+      const result = PostCommentCreateSchema.safeParse({ body: 'nice shot' });
+      expect(result.success).toBe(true);
+      expect(result.data?.parentId).toBeUndefined();
+    });
+
+    it('should accept a reply with a parent id', () => {
+      const parentId = newUuid();
+      const result = PostCommentCreateSchema.safeParse({ body: 'agreed', parentId });
+      expect(result.success).toBe(true);
+      expect(result.data?.parentId).toBe(parentId);
+    });
+
+    it('should reject an empty body', () => {
+      expect(PostCommentCreateSchema.safeParse({ body: '' }).success).toBe(false);
+      expect(PostCommentCreateSchema.safeParse({ body: ' '.repeat(3) }).success).toBe(false);
+    });
+
+    it('should reject a body over 5000 characters', () => {
+      expect(PostCommentCreateSchema.safeParse({ body: 'x'.repeat(5001) }).success).toBe(false);
+      expect(PostCommentCreateSchema.safeParse({ body: 'x'.repeat(5000) }).success).toBe(true);
+    });
+
+    it('should reject a non-UUID parent id', () => {
+      expect(PostCommentCreateSchema.safeParse({ body: 'hi', parentId: 'not-a-uuid' }).success).toBe(false);
+    });
+  });
+
+  describe('mapPostComment', () => {
+    it('should map a comment row with its depth and author', () => {
+      const userId = newUuid();
+      const comment = {
+        id: newUuid(),
+        postId: newUuid(),
+        parentId: null,
+        userId,
+        body: 'hello',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+        updateId: newUuid(),
+        user: { id: userId, name: 'a', email: 'a@b.c' },
+      };
+      const result = mapPostComment(comment as never, 2);
+      expect(result.id).toBe(comment.id);
+      expect(result.postId).toBe(comment.postId);
+      expect(result.parentId).toBeNull();
+      expect(result.depth).toBe(2);
+      expect(result.body).toBe('hello');
+      expect(result.createdAt).toEqual(comment.createdAt);
+      expect(result.updatedAt).toEqual(comment.updatedAt);
+      expect(result.user.id).toBe(userId);
+      expect(result.user.name).toBe('a');
+      expect(result.user.email).toBe('a@b.c');
     });
   });
 });
