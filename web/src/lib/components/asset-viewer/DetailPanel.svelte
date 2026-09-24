@@ -33,6 +33,7 @@
   import UserAvatar from '../shared-components/UserAvatar.svelte';
   import AlbumListItemDetails from './AlbumListItemDetails.svelte';
   import DetailPanelPeople from '$lib/components/asset-viewer/DetailPanelPeople.svelte';
+  import DetailPanelPosts from '$lib/components/asset-viewer/DetailPanelPosts.svelte';
   import { faceManager } from '$lib/stores/face.svelte';
 
   interface Props {
@@ -374,6 +375,10 @@
       </section>
     {/if}
   {/await}
+
+  {#if authManager.authenticated}
+    <DetailPanelPosts {asset} />
+  {/if}
 
   {#if authManager.authenticated && authManager.preferences.tags.enabled}
     <section class="relative px-2 pb-12 dark:bg-immich-dark-bg dark:text-immich-dark-fg">
