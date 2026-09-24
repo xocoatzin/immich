@@ -359,6 +359,32 @@ const checkOtherAccess = async (access: AccessRepository, request: OtherAccessRe
       return access.workflow.checkOwnerAccess(auth.user.id, ids);
     }
 
+    case Permission.PostCreate: {
+      // any authenticated user can create a post
+      return new Set(ids);
+    }
+
+    case Permission.PostRead:
+    case Permission.PostCommentCreate:
+    case Permission.PostLikeCreate: {
+      return await access.post.checkReadAccess(auth.user.id, ids);
+    }
+
+    case Permission.PostUpdate:
+    case Permission.PostDelete: {
+      return await access.post.checkOwnerAccess(auth.user.id, ids);
+    }
+
+    case Permission.PostCommentDelete: {
+      const isOwner = await access.post.checkCommentOwnerAccess(auth.user.id, ids);
+      const isPostOwner = await access.post.checkCommentPostOwnerAccess(auth.user.id, setDifference(ids, isOwner));
+      return setUnion(isOwner, isPostOwner);
+    }
+
+    case Permission.PostLikeDelete: {
+      return await access.post.checkLikeOwnerAccess(auth.user.id, ids);
+    }
+
     default: {
       return new Set<string>();
     }

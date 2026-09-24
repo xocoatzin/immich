@@ -270,6 +270,74 @@ where
   "partner"."sharedById" in ($1)
   and "partner"."sharedWithId" = $2
 
+-- AccessRepository.post.checkOwnerAccess
+select
+  "post"."id"
+from
+  "post"
+where
+  "post"."id" in ($1)
+  and "post"."ownerId" = $2
+  and "post"."deletedAt" is null
+
+-- AccessRepository.post.checkReadAccess
+select
+  "post"."id"
+from
+  "post"
+  inner join "user" as "owner" on "owner"."id" = "post"."ownerId"
+  and "owner"."deletedAt" is null
+  left join "post_audience" as "audience" on "audience"."postId" = "post"."id"
+  and "audience"."userId" = $1::uuid
+  left join "partner" on "partner"."sharedById" = "post"."ownerId"
+  and "partner"."sharedWithId" = $2::uuid
+where
+  "post"."id" in ($3)
+  and "post"."deletedAt" is null
+  and (
+    "post"."ownerId" = $4
+    or "post"."visibility" = 'public'
+    or (
+      "post"."visibility" = 'partners'
+      and "partner"."sharedById" is not null
+    )
+    or (
+      "post"."visibility" = 'specific'
+      and "audience"."userId" is not null
+    )
+  )
+
+-- AccessRepository.post.checkCommentOwnerAccess
+select
+  "post_comment"."id"
+from
+  "post_comment"
+where
+  "post_comment"."id" in ($1)
+  and "post_comment"."userId" = $2
+  and "post_comment"."deletedAt" is null
+
+-- AccessRepository.post.checkCommentPostOwnerAccess
+select
+  "post_comment"."id"
+from
+  "post_comment"
+  inner join "post" on "post"."id" = "post_comment"."postId"
+  and "post"."deletedAt" is null
+where
+  "post_comment"."id" in ($1)
+  and "post_comment"."deletedAt" is null
+  and "post"."ownerId" = $2
+
+-- AccessRepository.post.checkLikeOwnerAccess
+select
+  "post_like"."postId"
+from
+  "post_like"
+where
+  "post_like"."postId" in ($1)
+  and "post_like"."userId" = $2
+
 -- AccessRepository.session.checkOwnerAccess
 select
   "session"."id"

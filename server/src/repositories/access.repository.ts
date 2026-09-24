@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { type Kysely, type NotNull, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { ChunkedSet, DummyValue, GenerateSql } from 'src/decorators.js';
-import { AlbumUserRole, AssetVisibility } from 'src/enum.js';
+import { AlbumUserRole, AssetVisibility, PostVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import { asUuid } from 'src/utils/database.js';
 
@@ -573,6 +573,114 @@ class PartnerAccess {
   }
 }
 
+class PostAccess {
+  constructor(private db: Kysely<DB>) {}
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 1 })
+  async checkOwnerAccess(userId: string, postIds: Set<string>) {
+    if (postIds.size === 0) {
+      return new Set<string>();
+    }
+
+    return this.db
+      .selectFrom('post')
+      .select('post.id')
+      .where('post.id', 'in', [...postIds])
+      .where('post.ownerId', '=', userId)
+      .where('post.deletedAt', 'is', null)
+      .execute()
+      .then((posts) => new Set(posts.map((post) => post.id)));
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 1 })
+  async checkReadAccess(userId: string, postIds: Set<string>) {
+    if (postIds.size === 0) {
+      return new Set<string>();
+    }
+
+    return this.db
+      .selectFrom('post')
+      .innerJoin('user as owner', (join) =>
+        join.onRef('owner.id', '=', 'post.ownerId').on('owner.deletedAt', 'is', null),
+      )
+      .select('post.id')
+      .leftJoin('post_audience as audience', (join) =>
+        join.onRef('audience.postId', '=', 'post.id').on('audience.userId', '=', asUuid(userId)),
+      )
+      .leftJoin('partner', (join) =>
+        join.onRef('partner.sharedById', '=', 'post.ownerId').on('partner.sharedWithId', '=', asUuid(userId)),
+      )
+      .where('post.id', 'in', [...postIds])
+      .where('post.deletedAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('post.ownerId', '=', userId),
+          eb('post.visibility', '=', sql.lit(PostVisibility.Public)),
+          eb.and([
+            eb('post.visibility', '=', sql.lit(PostVisibility.Partners)),
+            eb('partner.sharedById', 'is not', null),
+          ]),
+          eb.and([eb('post.visibility', '=', sql.lit(PostVisibility.Specific)), eb('audience.userId', 'is not', null)]),
+        ]),
+      )
+      .execute()
+      .then((posts) => new Set(posts.map((post) => post.id)));
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 1 })
+  async checkCommentOwnerAccess(userId: string, commentIds: Set<string>) {
+    if (commentIds.size === 0) {
+      return new Set<string>();
+    }
+
+    return this.db
+      .selectFrom('post_comment')
+      .select('post_comment.id')
+      .where('post_comment.id', 'in', [...commentIds])
+      .where('post_comment.userId', '=', userId)
+      .where('post_comment.deletedAt', 'is', null)
+      .execute()
+      .then((comments) => new Set(comments.map((comment) => comment.id)));
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 1 })
+  async checkCommentPostOwnerAccess(userId: string, commentIds: Set<string>) {
+    if (commentIds.size === 0) {
+      return new Set<string>();
+    }
+
+    return this.db
+      .selectFrom('post_comment')
+      .select('post_comment.id')
+      .innerJoin('post', (join) => join.onRef('post.id', '=', 'post_comment.postId').on('post.deletedAt', 'is', null))
+      .where('post_comment.id', 'in', [...commentIds])
+      .where('post_comment.deletedAt', 'is', null)
+      .where('post.ownerId', '=', userId)
+      .execute()
+      .then((comments) => new Set(comments.map((comment) => comment.id)));
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID_SET] })
+  @ChunkedSet({ paramIndex: 1 })
+  async checkLikeOwnerAccess(userId: string, postIds: Set<string>) {
+    if (postIds.size === 0) {
+      return new Set<string>();
+    }
+
+    return this.db
+      .selectFrom('post_like')
+      .select('post_like.postId')
+      .where('post_like.postId', 'in', [...postIds])
+      .where('post_like.userId', '=', userId)
+      .execute()
+      .then((likes) => new Set(likes.map((like) => like.postId)));
+  }
+}
+
 class TagAccess {
   constructor(private db: Kysely<DB>) {}
 
@@ -627,6 +735,7 @@ export class AccessRepository {
   clusterGroupRequest: ClusterGroupRequestAccess;
   person: PersonAccess;
   partner: PartnerAccess;
+  post: PostAccess;
   session: SessionAccess;
   stack: StackAccess;
   tag: TagAccess;
@@ -646,6 +755,7 @@ export class AccessRepository {
     this.clusterGroupRequest = new ClusterGroupRequestAccess(db);
     this.person = new PersonAccess(db);
     this.partner = new PartnerAccess(db);
+    this.post = new PostAccess(db);
     this.session = new SessionAccess(db);
     this.stack = new StackAccess(db);
     this.tag = new TagAccess(db);

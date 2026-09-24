@@ -68,6 +68,14 @@ export const newAccessRepositoryMock = (): IAccessRepositoryMock => {
       checkUpdateAccess: vitest.fn().mockResolvedValue(new Set()),
     },
 
+    post: {
+      checkOwnerAccess: vitest.fn().mockResolvedValue(new Set()),
+      checkReadAccess: vitest.fn().mockResolvedValue(new Set()),
+      checkCommentOwnerAccess: vitest.fn().mockResolvedValue(new Set()),
+      checkCommentPostOwnerAccess: vitest.fn().mockResolvedValue(new Set()),
+      checkLikeOwnerAccess: vitest.fn().mockResolvedValue(new Set()),
+    },
+
     session: {
       checkOwnerAccess: vitest.fn().mockResolvedValue(new Set()),
     },
